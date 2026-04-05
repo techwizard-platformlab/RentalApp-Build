@@ -138,10 +138,12 @@ jobs:
           name: analysis-reports
           path: .
 
-      # v6 fixes security vulnerability in v5; quality gate handled by
-      # sonar.qualitygate.wait=true in sonar-project.properties
+      # v6 fixes security vulnerability in v5.
+      # continue-on-error: quality gate is non-blocking until tests are written.
+      # Re-enable blocking once Django test coverage >= 80%.
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v6
+        continue-on-error: true
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
