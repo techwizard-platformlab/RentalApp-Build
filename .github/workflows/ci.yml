@@ -138,15 +138,10 @@ jobs:
           name: analysis-reports
           path: .
 
+      # v6 fixes security vulnerability in v5; quality gate handled by
+      # sonar.qualitygate.wait=true in sonar-project.properties
       - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v5
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
-      - name: SonarQube Quality Gate check
-        uses: SonarSource/sonarqube-quality-gate-action@v1
-        timeout-minutes: 5
+        uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
