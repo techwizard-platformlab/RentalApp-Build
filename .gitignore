@@ -7,8 +7,23 @@
 .env.*
 *.env
 !.env.example
+!bootstrap/.env.example
+bootstrap/.env
 secrets.json
 credentials.json
+service-account*.json
+*-key.json
+
+# ── Certificates & Keys ──────────────────────────────────────
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
+kubeconfig
+.kube/
 
 # ── Python ──────────────────────────────────────────────────
 __pycache__/
