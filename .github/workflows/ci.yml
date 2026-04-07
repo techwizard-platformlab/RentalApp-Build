@@ -280,26 +280,31 @@ jobs:
             | grep "^Digest:" | awk '{print $2}')
           cosign sign --yes "${{ env.ACR_IMAGE }}@${IMAGE_DIGEST}"
 
-      # Keep only the last 5 versioned tags; latest + buildcache are excluded
-      # by their patterns. Untagged manifests (old cosign sigs etc.) also pruned.
+      # Keep only the last 5 versioned tags; latest + buildcache are never deleted.
+      # Uses az acr repository delete (AcrDelete permission) instead of
+      # az acr run / acr purge (scheduleRun — blocked on KodeKloud).
       - name: Prune old ACR tags (keep last 5)
         run: |
           REPO=$(echo "${{ env.ACR_IMAGE }}" | cut -d'/' -f2-)
+          ACR="${{ secrets.ACR_NAME }}"
+
+          prune_tags() {
+            local pattern=$1
+            # List all tags matching pattern, newest first; delete beyond 5th
+            az acr repository show-tags \
+              --name "$ACR" --repository "$REPO" \
+              --orderby time_desc --output tsv \
+              | grep -E "$pattern" \
+              | tail -n +6 \
+              | xargs -r -I{} az acr repository delete \
+                  --name "$ACR" --image "$REPO:{}" --yes
+          }
 
           # Short-sha tags  e.g. 4e4e3616
-          az acr run --registry "${{ secrets.ACR_NAME }}" \
-            --cmd "acr purge --filter '${REPO}:[0-9a-f]{8}' --ago 0d --keep 5" \
-            /dev/null
+          prune_tags '^[0-9a-f]{8}$'
 
           # Branch-sha tags  e.g. main-4e4e3616
-          az acr run --registry "${{ secrets.ACR_NAME }}" \
-            --cmd "acr purge --filter '${REPO}:.*-[0-9a-f]{8}' --ago 0d --keep 5" \
-            /dev/null
-
-          # Untagged manifests (old cosign signatures, dangling layers)
-          az acr run --registry "${{ secrets.ACR_NAME }}" \
-            --cmd "acr purge --filter '${REPO}:.*' --ago 1d --untagged" \
-            /dev/null
+          prune_tags '^.+-[0-9a-f]{8}$'
 
   # ────────────────────────────────────────────────────────────────────────────
   # JOB 6 — Push to Google Artifact Registry (GCR)
