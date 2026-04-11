@@ -50,7 +50,7 @@ def load_env(env_path: Path) -> dict:
         key, _, val = line.partition("=")
         key = key.strip()
         val = val.strip()
-        m = re.match(r'^["\'](.+)["\']$', val)
+        m = re.match(r'^["\'](.*)["\']$', val)
         if m:
             val = m.group(1)
         if key:
