@@ -29,6 +29,7 @@ env:
   DOCKERHUB_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/ai-rentalapp-ledger
   ACR_IMAGE: ${{ secrets.ACR_LOGIN_SERVER }}/rental-app-ledger
   GCR_IMAGE: ${{ secrets.GCR_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/rental-app/rental-app-ledger
+  ACR_FRONTEND_IMAGE: ${{ secrets.ACR_LOGIN_SERVER }}/rentalapp-frontend
 
 jobs:
   # ────────────────────────────────────────────────────────────────────────────
@@ -129,6 +130,30 @@ jobs:
             bandit-report.json
             pylint-report.txt
           retention-days: 7
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # JOB 1B — Frontend Build test
+  # ────────────────────────────────────────────────────────────────────────────
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm install
+
+      - name: Build Next.js
+        working-directory: frontend
+        run: npm run build
 
   # ────────────────────────────────────────────────────────────────────────────
   # JOB 2 — SonarQube / SonarCloud scan
@@ -255,7 +280,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
 
-      - name: Build & push to ACR
+      - name: Build & push Backend to ACR
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
         with:
           context: .
@@ -268,15 +293,33 @@ jobs:
           cache-from: type=registry,ref=${{ env.ACR_IMAGE }}:buildcache
           cache-to: type=registry,ref=${{ env.ACR_IMAGE }}:buildcache,mode=max
 
+      - name: Build & push Frontend to ACR
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.ACR_FRONTEND_IMAGE }}:latest
+            ${{ env.ACR_FRONTEND_IMAGE }}:${{ needs.image-meta.outputs.short_sha }}
+            ${{ env.ACR_FRONTEND_IMAGE }}:${{ needs.image-meta.outputs.tags_suffix }}
+          cache-from: type=registry,ref=${{ env.ACR_FRONTEND_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.ACR_FRONTEND_IMAGE }}:buildcache,mode=max
+
       - name: Install cosign
         uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac  # v3
 
-      - name: Sign ACR image (keyless cosign)
+      - name: Sign ACR images (keyless cosign)
         run: |
           IMAGE_DIGEST=$(docker buildx imagetools inspect \
             "${{ env.ACR_IMAGE }}:${{ needs.image-meta.outputs.short_sha }}" \
             | grep "^Digest:" | awk '{print $2}')
           cosign sign --yes "${{ env.ACR_IMAGE }}@${IMAGE_DIGEST}"
+
+          FRONTEND_DIGEST=$(docker buildx imagetools inspect \
+            "${{ env.ACR_FRONTEND_IMAGE }}:${{ needs.image-meta.outputs.short_sha }}" \
+            | grep "^Digest:" | awk '{print $2}')
+          cosign sign --yes "${{ env.ACR_FRONTEND_IMAGE }}@${FRONTEND_DIGEST}"
 
       # Keep only the last 5 versioned tags; latest + buildcache are never deleted.
       # Uses az acr repository delete (AcrDelete permission) instead of
